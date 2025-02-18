@@ -3,13 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-	"unsafe"
-
-	"golang.org/x/sys/windows"
 )
 
 type Point struct {
@@ -17,50 +15,76 @@ type Point struct {
 }
 
 var (
-	user32            = windows.NewLazyDLL("user32.dll")
-	getCursorPos      = user32.NewProc("GetCursorPos")
-	setCursorPos      = user32.NewProc("SetCursorPos")
-	mouse_event       = user32.NewProc("mouse_event")
 	lastMousePosition Point
 	lastMouseMoveTime time.Time
-	zigzag            bool // Alternates between true/false for zigzag movement
 )
 
-const (
-	MOUSEEVENTF_MOVE = 0x0001
-)
+// Platform-specific interface
+type mousePlatform interface {
+	getCursorPos() (Point, error)
+	setCursorPos(x, y int32) error
+	moveMouseRelative(x, y int32) error
+}
 
-func jiggleMouse(zenMode bool, distance int32) {
+var mousePlatformImpl mousePlatform
+
+func init() {
+	mousePlatformImpl = newMouse()
+}
+
+func jiggleMouse(zenMode bool, diameter int32) {
 	if zenMode {
 		// Simulate mouse movement without actually moving cursor
-		_, _, _ = mouse_event.Call(MOUSEEVENTF_MOVE, 0, 0, 0, 0)
+		mousePlatformImpl.moveMouseRelative(0, 0)
 		fmt.Println("Zen jiggle")
-	} else {
-		var currentPos Point
-		_, _, _ = getCursorPos.Call(uintptr(unsafe.Pointer(&currentPos)))
-
-		// Zigzag movement pattern
-		movement := distance
-		if !zigzag {
-			movement = -distance
-		}
-		zigzag = !zigzag
-
-		newX := currentPos.X + movement
-		newY := currentPos.Y + movement
-		_, _, _ = setCursorPos.Call(uintptr(newX), uintptr(newY))
-		fmt.Printf("Mouse moved to: %d, %d (zigzag: %v)\n", newX, newY, zigzag)
+		return
 	}
-	lastMouseMoveTime = time.Now()
+
+	startPos, _ := mousePlatformImpl.getCursorPos()
+	radius := float64(diameter) / 2
+	startTime := time.Now()
+	duration := 200 * time.Millisecond
+
+	// Number of steps to complete the circle
+	steps := int(diameter)
+
+	for i := 0; i <= steps; i++ {
+		// Calculate progress (0 to 1)
+		progress := float64(i) / float64(steps)
+
+		// Calculate angle (0 to 2π)
+		angle := progress * 2 * math.Pi
+
+		// Calculate offset from center
+		dx := int32(radius * math.Cos(angle))
+		dy := int32(radius * math.Sin(angle))
+
+		// Move to new position
+		newX := startPos.X + dx
+		newY := startPos.Y + dy
+		mousePlatformImpl.setCursorPos(newX, newY)
+
+		// Calculate remaining time and sleep accordingly
+		elapsed := time.Since(startTime)
+		if elapsed < duration {
+			stepDuration := duration / time.Duration(steps)
+			time.Sleep(stepDuration)
+		}
+	}
+
+	// Return to starting position and prevent sleep
+	mousePlatformImpl.setCursorPos(startPos.X, startPos.Y)
+	mousePlatformImpl.moveMouseRelative(0, 0) // This will trigger the prevent sleep
+	fmt.Println("Circle jiggle")
 }
 
 func checkMouseActivity(zenMode bool) {
-	var currentPos Point
-	_, _, _ = getCursorPos.Call(uintptr(unsafe.Pointer(&currentPos)))
+	currentPos, _ := mousePlatformImpl.getCursorPos()
 
 	if currentPos.X == lastMousePosition.X && currentPos.Y == lastMousePosition.Y {
 		if time.Since(lastMouseMoveTime) >= 30*time.Second {
-			jiggleMouse(zenMode, 4)
+			jiggleMouse(zenMode, 5)
+			lastMouseMoveTime = time.Now()
 		}
 	} else {
 		lastMousePosition = currentPos
@@ -87,8 +111,7 @@ func main() {
 	defer ticker.Stop()
 
 	// Initialize the last mouse position and time
-	var currentPos Point
-	_, _, _ = getCursorPos.Call(uintptr(unsafe.Pointer(&currentPos)))
+	currentPos, _ := mousePlatformImpl.getCursorPos()
 	lastMousePosition = currentPos
 	lastMouseMoveTime = time.Now()
 
