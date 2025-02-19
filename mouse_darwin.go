@@ -23,12 +23,12 @@ void moveMouse(CGFloat x, CGFloat y) {
 }
 
 void preventSleep() {
-    // Create and post a minimal middle mouse down and up event
-	// https://developer.apple.com/documentation/coregraphics/cgmousebutton?changes=_9&language=objc
+    // Create and post a minimal 31 mouse button down and up event
+    // https://developer.apple.com/documentation/coregraphics/cgmousebutton?changes=_9&language=objc
     CGPoint currentPos = getMousePos();
     //CGEventRef mouseDown = CGEventCreateMouseEvent(NULL, kCGEventOtherMouseDown, currentPos, kCGMouseButtonCenter);
     //CGEventRef mouseUp = CGEventCreateMouseEvent(NULL, kCGEventOtherMouseUp, currentPos, kCGMouseButtonCenter);
-	CGEventRef mouseDown = CGEventCreateMouseEvent(NULL, kCGEventOtherMouseDown, currentPos, 31);
+    CGEventRef mouseDown = CGEventCreateMouseEvent(NULL, kCGEventOtherMouseDown, currentPos, 31);
     CGEventRef mouseUp = CGEventCreateMouseEvent(NULL, kCGEventOtherMouseUp, currentPos, 31);
 
     // Post the events with a tiny delay
@@ -72,17 +72,17 @@ func (d *darwinMouse) getCursorPos() (Point, error) {
 	return Point{X: int32(x), Y: int32(y)}, nil
 }
 
-func (d *darwinMouse) setCursorPos(x, y int32) error {
-	moveMouseAbsolute(float64(x), float64(y))
+func (d *darwinMouse) setCursorPos(pos Point) error {
+	moveMouseAbsolute(float64(pos.X), float64(pos.Y))
 	return nil
 }
 
-func (d *darwinMouse) moveMouseRelative(x, y int32) error {
-	if x == 0 && y == 0 {
+func (d *darwinMouse) moveMouseRelative(delta Point) error {
+	if delta.X == 0 && delta.Y == 0 {
 		// For zen mode, simulate activity without visible movement
 		preventScreenLock()
 	} else {
-		moveMouseRelative(float64(x), float64(y))
+		moveMouseRelative(float64(delta.X), float64(delta.Y))
 		// Also prevent sleep after movement
 		preventScreenLock()
 	}

@@ -22,8 +22,8 @@ var (
 // Platform-specific interface
 type mousePlatform interface {
 	getCursorPos() (Point, error)
-	setCursorPos(x, y int32) error
-	moveMouseRelative(x, y int32) error
+	setCursorPos(pos Point) error
+	moveMouseRelative(delta Point) error
 }
 
 var mousePlatformImpl mousePlatform
@@ -35,7 +35,7 @@ func init() {
 func jiggleMouse(zenMode bool, diameter int32) {
 	if zenMode {
 		// Simulate mouse movement without actually moving cursor
-		mousePlatformImpl.moveMouseRelative(0, 0)
+		mousePlatformImpl.moveMouseRelative(Point{0, 0})
 		fmt.Println("Zen jiggle")
 		return
 	}
@@ -60,9 +60,11 @@ func jiggleMouse(zenMode bool, diameter int32) {
 		dy := int32(radius * math.Sin(angle))
 
 		// Move to new position
-		newX := startPos.X + dx
-		newY := startPos.Y + dy
-		mousePlatformImpl.setCursorPos(newX, newY)
+		newPos := Point{
+			X: startPos.X + dx,
+			Y: startPos.Y + dy,
+		}
+		mousePlatformImpl.setCursorPos(newPos)
 
 		// Calculate remaining time and sleep accordingly
 		elapsed := time.Since(startTime)
@@ -73,8 +75,8 @@ func jiggleMouse(zenMode bool, diameter int32) {
 	}
 
 	// Return to starting position and prevent sleep
-	mousePlatformImpl.setCursorPos(startPos.X, startPos.Y)
-	mousePlatformImpl.moveMouseRelative(0, 0) // This will trigger the prevent sleep
+	mousePlatformImpl.setCursorPos(startPos)
+	mousePlatformImpl.moveMouseRelative(Point{0, 0}) // This will trigger the prevent sleep
 	fmt.Println("Circle jiggle")
 }
 

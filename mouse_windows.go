@@ -30,12 +30,12 @@ func (w *windowsMouse) getCursorPos() (Point, error) {
 	return point, nil
 }
 
-func (w *windowsMouse) setCursorPos(x, y int32) error {
-	_, _, _ = setCursorPos.Call(uintptr(x), uintptr(y))
+func (w *windowsMouse) setCursorPos(pos Point) error {
+	_, _, _ = setCursorPos.Call(uintptr(pos.X), uintptr(pos.Y))
 	return nil
 }
 
-func (w *windowsMouse) moveMouseRelative(x, y int32) error {
-	_, _, _ = mouse_event.Call(MOUSEEVENTF_MOVE, uintptr(x), uintptr(y), 0, 0)
+func (w *windowsMouse) moveMouseRelative(delta Point) error {
+	_, _, _ = mouse_event.Call(MOUSEEVENTF_MOVE, uintptr(delta.X), uintptr(delta.Y), 0, 0)
 	return nil
 }
