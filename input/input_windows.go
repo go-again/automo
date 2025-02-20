@@ -37,7 +37,20 @@ var (
 	mouseHook      windows.Handle
 	userActivity   uint32
 	hookThreadDone = make(chan bool)
+
+	translateMessage = user32.NewProc("TranslateMessage")
+	dispatchMessage  = user32.NewProc("DispatchMessageW")
+	callNextHookEx   = user32.NewProc("CallNextHookEx")
 )
+
+type MSG struct {
+	Hwnd    windows.Handle
+	Message uint32
+	WParam  uintptr
+	LParam  uintptr
+	Time    uint32
+	Pt      Point
+}
 
 type windowsPlatform struct {
 	started bool
@@ -112,15 +125,20 @@ func hookCallback(code int, wparam, lparam uintptr) uintptr {
 			userActivity |= uint32(ActivityScroll)
 		}
 	}
-	// Always call the next hook
-	return windows.CallNextHookEx(0, code, wparam, lparam)
+	// Use the imported callNextHookEx proc instead
+	ret, _, _ := callNextHookEx.Call(0, uintptr(code), wparam, lparam)
+	return ret
 }
 
 func messageLoop() {
-	var msg windows.MSG
-	for getMsg.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0) > 0 {
-		windows.TranslateMessage(&msg)
-		windows.DispatchMessage(&msg)
+	var msg MSG
+	for {
+		ret, _, _ := getMsg.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
+		if ret == 0 {
+			break
+		}
+		translateMessage.Call(uintptr(unsafe.Pointer(&msg)))
+		dispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
 	}
 	hookThreadDone <- true
 }
