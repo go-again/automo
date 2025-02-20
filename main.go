@@ -8,39 +8,24 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-)
 
-type Point struct {
-	X, Y int32
-}
+	"automo/input"
+)
 
 var (
-	lastMousePosition Point
-	lastMouseMoveTime time.Time
+	lastMousePosition input.Point
+	lastActivityTime  time.Time
 )
 
-// Platform-specific interface
-type mousePlatform interface {
-	getCursorPos() (Point, error)
-	setCursorPos(pos Point) error
-	moveMouseRelative(delta Point) error
-}
-
-var mousePlatformImpl mousePlatform
-
-func init() {
-	mousePlatformImpl = newMouse()
-}
-
-func jiggleMouse(zenMode bool, diameter int32) {
+func jiggleMouse(zenMode bool, diameter int32, platform input.Platform) {
 	if zenMode {
 		// Simulate mouse movement without actually moving cursor
-		mousePlatformImpl.moveMouseRelative(Point{0, 0})
+		platform.MoveCursorRelative(input.Point{0, 0})
 		fmt.Println("Zen jiggle")
 		return
 	}
 
-	startPos, _ := mousePlatformImpl.getCursorPos()
+	startPos, _ := platform.GetCursorPos()
 	radius := float64(diameter) / 2
 	startTime := time.Now()
 	duration := 200 * time.Millisecond
@@ -60,11 +45,11 @@ func jiggleMouse(zenMode bool, diameter int32) {
 		dy := int32(radius * math.Sin(angle))
 
 		// Move to new position
-		newPos := Point{
+		newPos := input.Point{
 			X: startPos.X + dx,
 			Y: startPos.Y + dy,
 		}
-		mousePlatformImpl.setCursorPos(newPos)
+		platform.SetCursorPos(newPos)
 
 		// Calculate remaining time and sleep accordingly
 		elapsed := time.Since(startTime)
@@ -75,22 +60,21 @@ func jiggleMouse(zenMode bool, diameter int32) {
 	}
 
 	// Return to starting position and prevent sleep
-	mousePlatformImpl.setCursorPos(startPos)
-	mousePlatformImpl.moveMouseRelative(Point{0, 0}) // This will trigger the prevent sleep
+	platform.SetCursorPos(startPos)
+	platform.MoveCursorRelative(input.Point{0, 0}) // This will trigger the prevent sleep
 	fmt.Println("Circle jiggle")
 }
 
-func checkMouseActivity(zenMode bool) {
-	currentPos, _ := mousePlatformImpl.getCursorPos()
-
-	if currentPos.X == lastMousePosition.X && currentPos.Y == lastMousePosition.Y {
-		if time.Since(lastMouseMoveTime) >= 30*time.Second {
-			jiggleMouse(zenMode, 5)
-			lastMouseMoveTime = time.Now()
+func checkMouseActivity(zenMode bool, platform input.Platform) {
+	if !platform.HasUserActivity() {
+		if time.Since(lastActivityTime) >= 30*time.Second {
+			jiggleMouse(zenMode, 5, platform)
+			lastActivityTime = time.Now()
 		}
 	} else {
+		currentPos, _ := platform.GetCursorPos()
 		lastMousePosition = currentPos
-		lastMouseMoveTime = time.Now()
+		lastActivityTime = time.Now()
 	}
 }
 
@@ -98,11 +82,20 @@ func main() {
 	// Command line flags
 	zenMode := flag.Bool("zen", false, "Enable zen mode (virtual mouse movement)")
 	checkInterval := flag.Int("interval", 5, "Check interval in seconds")
+	debug := flag.Bool("debug", false, "Enable debug output")
 	flag.Parse()
 
-	fmt.Printf("Mouse mover started in %s mode. Press Ctrl+C to exit.\n",
+	// Set debug mode
+	input.Debug = *debug
+
+	platform := input.New()
+
+	fmt.Printf("automo started in %s mode. Press Ctrl+C to exit.\n",
 		map[bool]string{true: "zen", false: "normal"}[*zenMode])
 	fmt.Printf("Check interval: %d seconds\n", *checkInterval)
+	if *debug {
+		fmt.Println("Debug output enabled")
+	}
 
 	// Create a channel to handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -113,15 +106,15 @@ func main() {
 	defer ticker.Stop()
 
 	// Initialize the last mouse position and time
-	currentPos, _ := mousePlatformImpl.getCursorPos()
+	currentPos, _ := platform.GetCursorPos()
 	lastMousePosition = currentPos
-	lastMouseMoveTime = time.Now()
+	lastActivityTime = time.Now()
 
 	// Main loop
 	for {
 		select {
 		case <-ticker.C:
-			checkMouseActivity(*zenMode)
+			checkMouseActivity(*zenMode, platform)
 		case <-sigChan:
 			fmt.Println("\nShutting down...")
 			return

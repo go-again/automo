@@ -115,17 +115,26 @@ Set custom check interval (in seconds):
 automo.exe -interval 10
 ```
 
+Enable debug output:
+```bash
+# macOS
+./automo -debug
+# Windows
+automo.exe -debug
+```
+
 Combine options:
 ```bash
 # macOS
-./automo -zen -interval 10
+./automo -zen -interval 10 -debug
 # Windows
-automo.exe -zen -interval 10
+automo.exe -zen -interval 10 -debug
 ```
 
 ### Available Flags
 - `-zen`: Enable zen mode (simulates movement without moving cursor)
 - `-interval`: Set check interval in seconds (default: 5)
+- `-debug`: Enable debug output (shows detected user activity)
 
 ### Important Note for macOS Users
 
@@ -139,15 +148,22 @@ This security measure protects your system by ensuring that only applications yo
 
 ## How It Works
 
-`automo` monitors your mouse cursor position at regular intervals (default: every 5 seconds). If no movement is detected for 30 seconds:
+`automo` monitors your keyboard and mouse activity at regular intervals (default: every 5 seconds). If no activity is detected for 30 seconds:
 - In normal mode: Moves the cursor in a small circular pattern (±5 pixels)
 - In zen mode: Simulates mouse movement without moving the cursor
+
+The program detects various types of activity:
+- Keyboard input (key presses and releases)
+- Mouse movement
+- Mouse clicks
+- Mouse wheel scrolling
 
 The program shows console output to confirm it's working and can be stopped anytime with Ctrl+C.
 
 ## Tips
 - Use zen mode if you don't want visible cursor movement
 - Adjust the interval based on your needs (-interval flag)
+- Use debug mode to see what activity is being detected
 - Run from command prompt to see status messages
 - Use the silent build if you want to run it in the background
 - Create a shortcut to `automo.exe` with your preferred flags for quick access
