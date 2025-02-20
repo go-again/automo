@@ -5,6 +5,7 @@ package input
 import (
 	"fmt"
 	"runtime"
+	"sync/atomic"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -30,27 +31,13 @@ var (
 	setCursorPos = user32.NewProc("SetCursorPos")
 	mouse_event  = user32.NewProc("mouse_event")
 	setHook      = user32.NewProc("SetWindowsHookExW")
-	getMsg       = user32.NewProc("GetMessageW")
 	unhook       = user32.NewProc("UnhookWindowsHookEx")
+	callNextHook = user32.NewProc("CallNextHookEx")
 
-	keyboardHook   windows.Handle
-	mouseHook      windows.Handle
-	userActivity   uint32
-	hookThreadDone = make(chan bool)
-
-	translateMessage = user32.NewProc("TranslateMessage")
-	dispatchMessage  = user32.NewProc("DispatchMessageW")
-	callNextHookEx   = user32.NewProc("CallNextHookEx")
+	keyboardHook windows.Handle
+	mouseHook    windows.Handle
+	userActivity uint32
 )
-
-type MSG struct {
-	Hwnd    windows.Handle
-	Message uint32
-	WParam  uintptr
-	LParam  uintptr
-	Time    uint32
-	Pt      Point
-}
 
 type windowsPlatform struct {
 	started bool
@@ -83,8 +70,6 @@ func startHooks() error {
 		return fmt.Errorf("failed to set mouse hook: %v", err)
 	}
 
-	// Start message loop in a separate goroutine
-	go messageLoop()
 	return nil
 }
 
@@ -116,34 +101,19 @@ func hookCallback(code int, wparam, lparam uintptr) uintptr {
 	if code >= 0 {
 		switch wparam {
 		case WM_KEYDOWN, WM_KEYUP:
-			userActivity |= uint32(ActivityKeyboard)
+			atomic.StoreUint32(&userActivity, atomic.LoadUint32(&userActivity)|uint32(ActivityKeyboard))
 		case WM_MOUSEMOVE:
-			userActivity |= uint32(ActivityMouseMove)
+			atomic.StoreUint32(&userActivity, atomic.LoadUint32(&userActivity)|uint32(ActivityMouseMove))
 		case WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP:
-			userActivity |= uint32(ActivityMouseClick)
+			atomic.StoreUint32(&userActivity, atomic.LoadUint32(&userActivity)|uint32(ActivityMouseClick))
 		case WM_MOUSEWHEEL:
-			userActivity |= uint32(ActivityScroll)
+			atomic.StoreUint32(&userActivity, atomic.LoadUint32(&userActivity)|uint32(ActivityScroll))
 		}
 	}
-	// Use the imported callNextHookEx proc instead
-	ret, _, _ := callNextHookEx.Call(0, uintptr(code), wparam, lparam)
+	ret, _, _ := callNextHook.Call(0, uintptr(code), wparam, lparam)
 	return ret
 }
 
-func messageLoop() {
-	var msg MSG
-	for {
-		ret, _, _ := getMsg.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
-		if ret == 0 {
-			break
-		}
-		translateMessage.Call(uintptr(unsafe.Pointer(&msg)))
-		dispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
-	}
-	hookThreadDone <- true
-}
-
-// Rename receiver to match new type name
 func (p *windowsPlatform) GetCursorPos() (Point, error) {
 	var point Point
 	_, _, _ = getCursorPos.Call(uintptr(unsafe.Pointer(&point)))
@@ -161,10 +131,10 @@ func (p *windowsPlatform) MoveCursorRelative(delta Point) error {
 }
 
 func (p *windowsPlatform) HasUserActivity() bool {
-	activity := ActivityType(userActivity)
+	activity := ActivityType(atomic.LoadUint32(&userActivity))
 	if Debug && (activity != ActivityNone) {
 		fmt.Printf("Activity detected: %d\n", activity)
 	}
-	userActivity = 0
+	atomic.StoreUint32(&userActivity, 0)
 	return activity != ActivityNone
 }
