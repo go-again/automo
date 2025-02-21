@@ -142,6 +142,10 @@ void stopEventTap() {
     tapLoop = NULL;
 }
 
+void clearActivity() {
+    userActivity = 0;
+}
+
 uint32_t checkAndClearActivity() {
     uint32_t current = userActivity;
     userActivity = 0;
@@ -159,8 +163,19 @@ void moveMouse(CGFloat x, CGFloat y) {
     CGPoint point;
     point.x = x;
     point.y = y;
-    CGWarpMouseCursorPosition(point);
-    CGAssociateMouseAndMouseCursorPosition(true);
+
+	CGEventRef event = CGEventCreateMouseEvent(NULL, kCGEventMouseMoved, point, kCGMouseButtonLeft);
+    CGEventSetIntegerValueField(event, kCGMouseEventDeltaX, x);
+    CGEventSetIntegerValueField(event, kCGMouseEventDeltaY, y);
+    CGEventPost(kCGHIDEventTap, event);
+    CFRelease(event);
+}
+
+void zenMove() {
+    CGPoint point = getMousePos();
+	CGFloat x = point.x;
+	CGFloat y = point.y;
+	moveMouse(x, y);
 }
 
 bool hasKeyboardActivity() {
@@ -193,11 +208,6 @@ void simulateF20Press() {
 
     CFRelease(keyDown);
     CFRelease(keyUp);
-}
-
-void preventSleep() {
-    // Simulate F20 key press to prevent sleep
-    simulateF20Press();
 }
 */
 import "C"
@@ -239,10 +249,6 @@ func moveCursorRelative(x, y float64) {
 	moveCursorAbsolute(currentX+x, currentY+y)
 }
 
-func preventScreenLock() {
-	C.preventSleep()
-}
-
 func (p *darwinPlatform) GetCursorPos() (Point, error) {
 	x, y := getCursorLocation()
 	return Point{X: int32(x), Y: int32(y)}, nil
@@ -256,11 +262,13 @@ func (p *darwinPlatform) SetCursorPos(pos Point) error {
 func (p *darwinPlatform) MoveCursorRelative(delta Point) error {
 	if delta.X == 0 && delta.Y == 0 {
 		// For zen mode, simulate activity without visible movement
-		preventScreenLock()
+		C.zenMove()
 	} else {
 		moveCursorRelative(float64(delta.X), float64(delta.Y))
-		preventScreenLock()
 	}
+	// Clear activity after moving the cursor
+	C.clearActivity()
+
 	return nil
 }
 

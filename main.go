@@ -13,8 +13,7 @@ import (
 )
 
 var (
-	lastMousePosition input.Point
-	lastActivityTime  time.Time
+	lastActivityTime time.Time
 )
 
 func jiggleMouse(zenMode bool, diameter int32, platform input.Platform) {
@@ -66,15 +65,13 @@ func jiggleMouse(zenMode bool, diameter int32, platform input.Platform) {
 }
 
 func checkMouseActivity(zenMode bool, platform input.Platform) {
-	if !platform.HasUserActivity() {
+	if platform.HasUserActivity() {
+		lastActivityTime = time.Now()
+	} else {
 		if time.Since(lastActivityTime) >= 30*time.Second {
 			jiggleMouse(zenMode, 5, platform)
 			lastActivityTime = time.Now()
 		}
-	} else {
-		currentPos, _ := platform.GetCursorPos()
-		lastMousePosition = currentPos
-		lastActivityTime = time.Now()
 	}
 }
 
@@ -105,9 +102,6 @@ func main() {
 	ticker := time.NewTicker(time.Duration(*checkInterval) * time.Second)
 	defer ticker.Stop()
 
-	// Initialize the last mouse position and time
-	currentPos, _ := platform.GetCursorPos()
-	lastMousePosition = currentPos
 	lastActivityTime = time.Now()
 
 	// Main loop
