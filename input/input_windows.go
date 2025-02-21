@@ -9,15 +9,17 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// Mouse events: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-mouse_event
+
 const (
-	MOUSEEVENTF_MOVE = 0x0001
+	MOUSEEVENTF_MOVE     = 0x0001
+	MOUSEEVENTF_ABSOLUTE = 0x8000
 )
 
 var (
 	user32       = windows.NewLazyDLL("user32.dll")
 	getCursorPos = user32.NewProc("GetCursorPos")
-	setCursorPos = user32.NewProc("SetCursorPos")
-	mouse_event  = user32.NewProc("mouse_event")
+	mouseEvent   = user32.NewProc("mouse_event")
 
 	lastPosition Point
 )
@@ -42,12 +44,12 @@ func (p *windowsPlatform) GetCursorPos() (Point, error) {
 }
 
 func (p *windowsPlatform) SetCursorPos(pos Point) error {
-	_, _, _ = setCursorPos.Call(uintptr(pos.X), uintptr(pos.Y))
+	_, _, _ = mouseEvent.Call(MOUSEEVENTF_ABSOLUTE, uintptr(pos.X), uintptr(pos.Y), 0, 0)
 	return nil
 }
 
 func (p *windowsPlatform) MoveCursorRelative(delta Point) error {
-	_, _, _ = mouse_event.Call(MOUSEEVENTF_MOVE, uintptr(delta.X), uintptr(delta.Y), 0, 0)
+	_, _, _ = mouseEvent.Call(MOUSEEVENTF_MOVE, uintptr(delta.X), uintptr(delta.Y), 0, 0)
 	return nil
 }
 
