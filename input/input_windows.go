@@ -9,8 +9,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// Mouse events: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-mouse_event
-
 const (
 	MOUSEEVENTF_MOVE     = 0x0001
 	MOUSEEVENTF_ABSOLUTE = 0x8000
@@ -28,13 +26,17 @@ type windowsPlatform struct {
 	started bool
 }
 
-func NewPlatform() Platform {
+// NewPlatform returns a new platform-specific implementation
+func NewPlatform() (Platform, error) {
 	p := &windowsPlatform{}
 	// Get initial cursor position
-	pos, _ := p.GetCursorPos()
+	pos, err := p.GetCursorPos()
+	if err != nil {
+		return nil, err
+	}
 	lastPosition = pos
 	p.started = true
-	return p
+	return p, nil
 }
 
 func (p *windowsPlatform) GetCursorPos() (Point, error) {
@@ -54,7 +56,10 @@ func (p *windowsPlatform) MoveCursorRelative(delta Point) error {
 }
 
 func (p *windowsPlatform) HasUserActivity() bool {
-	currentPos, _ := p.GetCursorPos()
+	currentPos, err := p.GetCursorPos()
+	if err != nil {
+		return false
+	}
 	moved := currentPos.X != lastPosition.X || currentPos.Y != lastPosition.Y
 
 	if Debug && moved {
@@ -63,4 +68,9 @@ func (p *windowsPlatform) HasUserActivity() bool {
 
 	lastPosition = currentPos
 	return moved
+}
+
+func (p *windowsPlatform) Close() error {
+	// No resources to release on Windows
+	return nil
 }

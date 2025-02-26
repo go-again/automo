@@ -212,6 +212,7 @@ void simulateF20Press() {
 */
 import "C"
 import (
+	"errors"
 	"fmt"
 	"runtime"
 )
@@ -220,24 +221,25 @@ type darwinPlatform struct {
 	started bool
 }
 
-func NewPlatform() Platform {
-	p := &darwinPlatform{}
+func NewPlatform() (Platform, error) {
 	if ok := C.startEventTap(); !ok {
-		panic("Failed to start event tap")
+		return nil, errors.New("failed to start event tap")
 	}
+	p := &darwinPlatform{}
 	p.started = true
 	runtime.SetFinalizer(p, func(p *darwinPlatform) {
 		if p.started {
 			C.stopEventTap()
 		}
 	})
-	return p
+	return p, nil
 }
 
-// Helper functions with consistent naming
 func getCursorLocation() (x, y float64) {
 	point := C.getMousePos()
-	return float64(point.x), float64(point.y)
+	x = float64(point.x)
+	y = float64(point.y)
+	return
 }
 
 func moveCursorAbsolute(x, y float64) {
@@ -283,4 +285,13 @@ func (p *darwinPlatform) HasUserActivity() bool {
 // Optional: Add method to get detailed activity info if needed
 func (d *darwinPlatform) GetActivityDetails() ActivityType {
 	return ActivityType(C.checkAndClearActivity())
+}
+
+func (p *darwinPlatform) Close() error {
+	if p.started {
+		C.stopEventTap()
+		p.started = false
+		runtime.SetFinalizer(p, nil)
+	}
+	return nil
 }
